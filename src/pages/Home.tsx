@@ -2,8 +2,29 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { featuredFeed } from '../data/mockData';
 import { ArrowRight, Heart, Share2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
+  const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({});
+
+  // 从 localStorage 读取点赞状态
+  useEffect(() => {
+    const savedLikes = JSON.parse(localStorage.getItem('likes') || '{}');
+    setLikedPosts(savedLikes);
+  }, []);
+
+  // 处理点赞
+  const handleLike = (e: React.MouseEvent, postId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const newLiked = !likedPosts[postId];
+    const updatedLikes = { ...likedPosts, [postId]: newLiked };
+    setLikedPosts(updatedLikes);
+
+    // 保存到 localStorage
+    localStorage.setItem('likes', JSON.stringify(updatedLikes));
+  };
   return (
     <div className="min-h-screen relative">
       {/* Global subtle paper/noise texture */}
@@ -97,7 +118,7 @@ export default function Home() {
               >
                 <div className="flex flex-col sm:flex-row">
                   {/* Image Section */}
-                  <div className="w-full sm:w-[40%] aspect-[16/10] sm:aspect-auto relative overflow-hidden">
+                  <div className="w-full sm:w-[40%] h-[200px] relative overflow-hidden flex-shrink-0">
                     <img
                       src={item.imageUrl}
                       alt={item.title}
@@ -116,26 +137,34 @@ export default function Home() {
                   </div>
 
                   {/* Content Section */}
-                  <div className="w-full sm:w-[60%] p-5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-ink/5 flex items-center justify-center text-sm font-serif font-medium text-ink">
-                            {item.author[0]}
-                          </div>
-                          <span className="text-sm text-ink-light">{item.author}</span>
+                  <div className="w-full sm:w-[60%] p-5 flex flex-col">
+                    {/* Author Info - Fixed Height */}
+                    <div className="h-10 flex items-center justify-between mb-3 flex-shrink-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-ink/5 flex items-center justify-center text-sm font-serif font-medium text-ink">
+                          {item.author[0]}
                         </div>
-                        <span className="text-xs text-ink-light/60">{Math.floor(Math.random() * 7 + 1)}天前</span>
+                        <span className="text-sm text-ink-light truncate max-w-[120px]">{item.author}</span>
                       </div>
+                      <span className="text-xs text-ink-light/60 flex-shrink-0">{Math.floor(Math.random() * 7 + 1)}天前</span>
+                    </div>
 
-                      <h3 className="text-lg font-serif font-bold mb-2 group-hover:text-china-red transition-colors line-clamp-1">
+                    {/* Title - Fixed Height */}
+                    <div className="h-7 mb-2 flex-shrink-0">
+                      <h3 className="text-lg font-serif font-bold group-hover:text-china-red transition-colors line-clamp-1 leading-7">
                         {item.title}
                       </h3>
+                    </div>
 
-                      <p className="text-ink-light text-sm line-clamp-2 leading-relaxed mb-3">
+                    {/* Description - Fixed Height (2 lines) */}
+                    <div className="h-10 mb-3 flex-shrink-0">
+                      <p className="text-ink-light text-sm line-clamp-2 leading-5">
                         {item.description}
                       </p>
+                    </div>
 
+                    {/* Tags - Fixed Height */}
+                    <div className="h-6 mb-3 flex-shrink-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         {item.tags.slice(0, 2).map(tag => (
                           <span key={tag} className="text-xs px-2 py-1 bg-ink/5 text-ink-light rounded-md">
@@ -145,13 +174,21 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-ink/5">
-                      <div className="flex items-center gap-4 text-ink-light text-xs">
-                        <span className="flex items-center gap-1">
-                          <Heart className="w-4 h-4" />
-                          {item.likes}
-                        </span>
-                        <span className="flex items-center gap-1">
+                    {/* Footer - Fixed Height */}
+                    <div className="h-8 flex items-center justify-between pt-3 mt-auto border-t border-ink/5 flex-shrink-0">
+                      <div className="flex items-center gap-4 text-xs">
+                        <button
+                          onClick={(e) => handleLike(e, item.id)}
+                          className={`flex items-center gap-1 transition-colors ${
+                            likedPosts[item.id]
+                              ? 'text-china-red'
+                              : 'text-ink-light hover:text-china-red'
+                          }`}
+                        >
+                          <Heart className={`w-4 h-4 ${likedPosts[item.id] ? 'fill-current' : ''}`} />
+                          {item.likes + (likedPosts[item.id] ? 1 : 0)}
+                        </button>
+                        <span className="flex items-center gap-1 text-ink-light">
                           <Share2 className="w-4 h-4" />
                           分享
                         </span>

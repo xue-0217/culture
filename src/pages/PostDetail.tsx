@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowLeft, Heart, MessageCircle, Bookmark, Share2, Eye } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { mockFeed, featuredFeed } from '../data/mockData';
 
 export default function PostDetail() {
@@ -19,13 +19,13 @@ export default function PostDetail() {
   const [comments, setComments] = useState<Array<{ id: string; user: string; content: string; time: string }>>([]);
 
   // 从 localStorage 读取点赞和收藏状态
-  useState(() => {
+  useEffect(() => {
     if (!postId) return;
     const savedLikes = JSON.parse(localStorage.getItem('likes') || '{}');
     const savedBookmarks = JSON.parse(localStorage.getItem('bookmarks') || '{}');
     setLiked(savedLikes[postId] || false);
     setBookmarked(savedBookmarks[postId] || false);
-  });
+  }, [postId]);
 
   const handleLike = () => {
     const newLiked = !liked;

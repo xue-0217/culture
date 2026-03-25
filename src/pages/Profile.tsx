@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Settings, Image as ImageIcon, Bookmark, Heart } from 'lucide-react';
+import { Image as ImageIcon, Bookmark, Heart } from 'lucide-react';
 import { mockFeed } from '../data/mockData';
 import { Link } from 'react-router-dom';
 
@@ -124,10 +124,6 @@ export default function Profile() {
             </div>
           </div>
         </div>
-        
-        <button className="relative z-10 p-3 rounded-full border border-ink/10 hover:bg-ink/5 transition-colors text-ink-light hover:text-ink">
-          <Settings className="w-5 h-5" />
-        </button>
       </div>
 
       {/* Tabs */}

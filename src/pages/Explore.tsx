@@ -8,7 +8,7 @@ const TOPICS = [
     title: '非遗传承',
     subtitle: 'Intangible Cultural Heritage',
     description: '探索皮影、剪纸、刺绣等非物质文化遗产的数字新生。',
-    image: '/src/assets/cixiu.png',
+    image: '/images/cixiu.png',
     color: 'bg-china-red/10 text-china-red',
     link: 'https://www.ihchina.cn/index.html/#page1'
   },
@@ -17,7 +17,7 @@ const TOPICS = [
     title: '地域风物',
     subtitle: 'Local Culture',
     description: '从江南水乡到大漠孤烟，感受不同地域的独特文化魅力。',
-    image: '/src/assets/jiangnanshuixiang.png',
+    image: '/images/jiangnanshuixiang.png',
     color: 'bg-gold/10 text-gold',
     link:'https://www.dili360.com/'
   },
@@ -26,7 +26,7 @@ const TOPICS = [
     title: '数字艺术',
     subtitle: 'Digital Art',
     description: '传统文化符号在赛博朋克、像素风等现代语境下的重构。',
-    image: '/src/assets/shuziyishu.png',
+    image: '/images/shuziyishu.png',
     color: 'bg-ink/10 text-ink',
     link:'https://www.zcool.com.cn/'
   }
