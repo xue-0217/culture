@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;900&family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Noto Serif SC", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  
+  --color-rice: #F9F9F6;
+  --color-ink: #1A1A1A;
+  --color-ink-light: #5C5C5C;
+  --color-china-red: #C83C23;
+  --color-gold: #D4AF37;
+}
+
+@layer base {
+  body {
+    @apply bg-rice text-ink font-sans antialiased selection:bg-china-red selection:text-white;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif tracking-wide;
+  }
+
+  /* Ensure links and buttons show pointer cursor */
+  a, button, input, textarea, select {
+    cursor: pointer;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-ink-light/30 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-ink-light/50;
+}
