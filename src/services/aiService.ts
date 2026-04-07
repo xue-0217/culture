@@ -12,11 +12,9 @@ export interface StoryResult {
 }
 
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
+const QWEN_API_KEY = import.meta.env.VITE_QWEN_API_KEY || '';
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
-const POEMS = [
-  { title: "仙阁观涛", poem: ["危崖叠翠倚青空", "飞瀑流泉落晚风", "仙阁凭栏观浪涌", "松涛万里入襟胸"] }
-];
+const QWEN_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
 const STORY_STYLES = {
   '童话': '以童话风格创作，充满想象力和童趣，语言生动活泼',
@@ -152,6 +150,13 @@ async function callDeepSeekAPI(prompt: string, imageData?: string): Promise<{ ti
   const data = await response.json();
   const content = data.choices[0]?.message?.content || '{}';
 
+  console.log('API响应:', {
+    hasChoices: !!data.choices,
+    choicesLength: data.choices?.length,
+    hasContent: !!content,
+    contentPreview: content.substring(0, 100)
+  });
+
   try {
     // 去除可能的 markdown 代码块标记
     let cleanedContent = content.trim();
@@ -165,6 +170,8 @@ async function callDeepSeekAPI(prompt: string, imageData?: string): Promise<{ ti
     }
     cleanedContent = cleanedContent.trim();
 
+    console.log('清理后的内容:', cleanedContent);
+
     const result = JSON.parse(cleanedContent);
     return {
       title: result.title || '意境',
@@ -174,7 +181,98 @@ async function callDeepSeekAPI(prompt: string, imageData?: string): Promise<{ ti
     };
   } catch (e) {
     console.error('解析 DeepSeek 响应失败:', content);
-    throw new Error('AI 响应格式错误');
+    throw new Error('AI 响应格式错误: ' + (e instanceof Error ? e.message : '未知错误'));
+  }
+}
+
+// 调用阿里千问API（用于看图作诗）
+async function callQwenAPI(imageData: string): Promise<{ title: string; poem: string[] }> {
+  if (!QWEN_API_KEY) {
+    throw new Error('QWEN_API_KEY 未配置');
+  }
+
+  console.log('调用阿里千问API:', {
+    hasApiKey: !!QWEN_API_KEY,
+    apiKeyPrefix: QWEN_API_KEY.substring(0, 10) + '...',
+    hasImageData: !!imageData
+  });
+
+  const messages = [
+    {
+      role: 'system',
+      content: '你是一位精通中国古典文学的诗人。请根据用户上传的图片，创作一首四句七言诗（绝句格式），并给出一个简洁的四字标题。请直接返回JSON格式，不要包含任何其他文字。格式：{"title":"四字标题","poem":["第一句","第二句","第三句","第四句"]}'
+    },
+    {
+      role: 'user',
+      content: [
+        {
+          type: 'image_url',
+          image_url: {
+            url: imageData
+          }
+        },
+        {
+          type: 'text',
+          text: '请根据这张图片的意境创作一首诗。'
+        }
+      ]
+    }
+  ];
+
+  const response = await fetch(QWEN_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${QWEN_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'qwen-vl-max-latest',
+      messages: messages,
+      temperature: 0.8,
+      max_tokens: 500
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`阿里千问API 调用失败: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0]?.message?.content || '{}';
+
+  console.log('阿里千问API响应:', {
+    hasChoices: !!data.choices,
+    choicesLength: data.choices?.length,
+    hasContent: !!content,
+    contentPreview: content.substring(0, 100)
+  });
+
+  try {
+    // 去除可能的 markdown 代码块标记
+    let cleanedContent = content.trim();
+    if (cleanedContent.startsWith('```json')) {
+      cleanedContent = cleanedContent.slice(7);
+    } else if (cleanedContent.startsWith('```')) {
+      cleanedContent = cleanedContent.slice(3);
+    }
+    if (cleanedContent.endsWith('```')) {
+      cleanedContent = cleanedContent.slice(0, -3);
+    }
+    cleanedContent = cleanedContent.trim();
+
+    console.log('清理后的内容:', cleanedContent);
+
+    const result = JSON.parse(cleanedContent);
+    return {
+      title: result.title || '意境',
+      poem: Array.isArray(result.poem) && result.poem.length === 4
+        ? result.poem
+        : ['第一句', '第二句', '第三句', '第四句']
+    };
+  } catch (e) {
+    console.error('解析阿里千问响应失败:', content);
+    throw new Error('AI 响应格式错误: ' + (e instanceof Error ? e.message : '未知错误'));
   }
 }
 
@@ -201,27 +299,13 @@ export async function generateFromText(prompt: string, style: string): Promise<P
 }
 
 export async function generateFromImage(imageUrl: string): Promise<PosterResult> {
-  try {
-    const aiResult = await callDeepSeekAPI(
-      '请根据这张图片的意境创作一首诗。',
-      imageUrl  // 传递图片数据
-    );
+  const aiResult = await callQwenAPI(imageUrl);
 
-    return {
-      imageUrl: imageUrl,
-      title: aiResult.title,
-      poem: aiResult.poem
-    };
-  } catch (error) {
-    // 如果 DeepSeek 不支持图片识别，返回基于图片的随机诗词
-    console.warn('图片识别失败，使用默认诗词:', error);
-    const randomPoem = POEMS[Math.floor(Math.random() * POEMS.length)];
-    return {
-      imageUrl: imageUrl,
-      title: randomPoem.title,
-      poem: randomPoem.poem
-    };
-  }
+  return {
+    imageUrl: imageUrl,
+    title: aiResult.title,
+    poem: aiResult.poem
+  };
 }
 
 // 聊天接口

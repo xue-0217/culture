@@ -61,21 +61,34 @@ export default function Create() {
   };
 
   const handleGenerate = async () => {
+    // 校验输入
+    if (mode === 'story') {
+      if (!keywords.trim()) {
+        alert('请输入关键词');
+        return;
+      }
+    } else {
+      if (!uploadedImage) {
+        alert('请上传图片');
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setStoryResult(null);
     setPosterResult(null);
+
     try {
       if (mode === 'story') {
-        if (!keywords.trim()) return;
         const res = await generateStory(keywords, selectedStyle);
         setStoryResult(res);
       } else {
-        if (!uploadedImage) return;
         const res = await generateFromImage(uploadedImage);
         setPosterResult(res);
       }
     } catch (error) {
-      console.error(error);
+      console.error('生成失败:', error);
+      alert(`生成失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsGenerating(false);
     }
