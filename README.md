@@ -36,3 +36,11 @@ npm run preview
 ```
 
 Vite 本地开发和预览均提供 AI 接口。使用 Vercel 时，`api/culture-ai.ts` 作为服务端函数运行，在部署环境配置同名密钥。其他静态托管需要额外部署该服务端接口。对公网启用计费模型前，应配置站点访问控制或请求配额。
+
+## 部署到 Cloudflare Workers
+
+`wrangler.jsonc` 将 `dist` 作为网站静态资源，并将 `/api/culture-ai` 交给 `workers/index.ts`。直接打开或刷新展览等子路由时，由 Worker 的单页应用配置返回页面。创作接口按访客限制请求频率。
+
+首次发布时，运行 `npx wrangler login`，然后用 `npm run deploy:cloudflare -- --secrets-file <本地密钥文件路径>` 随部署上传 `QWEN_API_KEY`。Worker 创建后，也可以在 Cloudflare 控制台的 **Settings → Variables and Secrets** 中管理创作配置。默认模型为 `qwen3.8-flash`，可通过 `QWEN_MODEL` 调整。
+
+后续运行 `npm run deploy:cloudflare` 发布新版。运行 `npm run build` 后，可通过 `npx wrangler dev` 在本地预览 Worker 和创作接口。

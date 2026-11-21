@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wenzhiwanxiang",
+  "main": "workers/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/culture-ai"]
+  },
+  "ratelimits": [
+    {
+      "name": "CREATION_RATE_LIMIT",
+      "namespace_id": "26112101",
+      "simple": { "limit": 12, "period": 60 }
+    }
+  ]
+}
