@@ -1,24 +1,107 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent, type MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Image as ImageIcon, Upload, Download, RefreshCw, Type, BookOpen, Copy, Share2, MessageCircle, X, Send, History, Plus, Trash2, Clock } from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Image as ImageIcon, Upload, Download, RefreshCw, Type, BookOpen, Copy, Share2, MessageCircle, X, Send, History, Plus, Trash2, Clock } from 'lucide-react';
 import { generateFromImage, PosterResult, generateStory, StoryResult, chatWithAI, ChatMessage, ChatSession, getChatSessions, createChatSession, updateChatSession, deleteChatSession, clearAllChatSessions } from '../services/aiService';
+import { MAX_CHAT_MESSAGE, MAX_IMAGE_BYTES, MAX_STORY_KEYWORDS, SUPPORTED_IMAGE_TYPES } from '../services/aiLimits';
+import { findExhibit, type Exhibit } from '../data/exhibition';
 
 const STORY_STYLES = ['童话', '历史', '纪实', '武侠', '科幻'];
+type CreationMode = 'story' | 'image2poem';
+
+function CreationIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" className={className} aria-hidden="true" focusable="false">
+      <path
+        d="M13.1 27.4H6.9a1.7 1.7 0 0 1-1.7-1.7V5.9a1.7 1.7 0 0 1 1.7-1.7h10.6l5.5 5.6h-5.5V4.2M9.3 14h5.9m-5.9 4.6h3.6m12.7-4.7 4.1 4.1"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M15.5 26.7l1.8-7.5 6.5-3.5 4.2 4.2-3.2 6.1-8.7 1.7 4.8-4.8a1.25 1.25 0 1 0-.85-.85z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function MoonPoemIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M9 17C15 8 23 4 34 5c14-1 24 12 25 26 1 18-12 28-27 28C14 59 5 47 5 33c0-6 1-11 4-16ZM38 13c-3 8 3 17 11 17-5 6-14 7-19 1-5-7-1-15 8-18ZM13 39c10-4 18 3 28 0 5-1 9-1 11 1-4 1-8 3-13 4-9 2-17-3-26-2-2 0-2-2 0-3Zm8 9c7-2 12 3 22 0 2 0 3 1 1 2-5 4-17 4-23 1-2-1-2-2 0-3Z"
+      />
+    </svg>
+  );
+}
+
+function InkstoneIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 64 64" fill="currentColor" className={className} aria-hidden="true" focusable="false">
+      <path
+        fillRule="evenodd"
+        d="M7 34c6-7 29-6 42-4 6 1 10 4 10 10 0 7-4 13-10 14-10 2-28 4-39-1-6-3-7-14-3-19Zm5 3c8-5 25-3 35-2 4 1 8 3 7 6-5 6-31 8-41 3-3-1-4-5-1-7Z"
+      />
+      <path d="M38 8c1 5 8 10 8 15 0 6-8 9-12 4-5-5 0-12 4-19ZM14 41c5-2 9-1 13 0-4 2-9 3-12 2-1-1-2-1-1-2Z" />
+    </svg>
+  );
+}
 
 export default function Create() {
-  const [mode, setMode] = useState<'story' | 'image2poem'>('story');
-  const [keywords, setKeywords] = useState('');
+  const [params] = useSearchParams();
+  const { state } = useLocation();
+  const exhibit = findExhibit(params.get('work'));
+  const returnTo = exhibit ? `/exhibitions/${exhibit.id}` : state?.returnTo ?? '/';
+  const initialMode = params.get('mode') === 'poem' ? 'image2poem' : 'story';
+  return (
+    <>
+      <header className="workshop-navigation wrap">
+        <Link to={returnTo} className="text-link"><ArrowLeft size={17} aria-hidden="true" /> 返回</Link>
+      </header>
+      <Workshop key={`${exhibit?.id ?? ''}:${initialMode}`} exhibit={exhibit} initialMode={initialMode} />
+    </>
+  );
+}
+
+function readImageAsDataUrl(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('无法读取图片，请重新选择。'));
+    };
+    reader.onerror = () => reject(new Error('无法读取图片，请重新选择。'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function Workshop({ exhibit, initialMode }: { exhibit?: Exhibit; initialMode: CreationMode }) {
+  const [mode, setMode] = useState<CreationMode>(initialMode);
+  const GenerateIcon = mode === 'story' ? CreationIcon : MoonPoemIcon;
+  const [keywords, setKeywords] = useState(exhibit?.keywords ?? '');
   const [selectedStyle, setSelectedStyle] = useState(STORY_STYLES[0]);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(exhibit?.detailImage ?? null);
+  const poemPreviewHint = uploadedImage
+    ? '点击「生成诗词」，照片和诗句会在这里排成海报。'
+    : '选一张照片，把画面里的光影写成诗。';
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isReadingImage, setIsReadingImage] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [storyResult, setStoryResult] = useState<StoryResult | null>(null);
   const [posterResult, setPosterResult] = useState<PosterResult | null>(null);
+  const [downloadError, setDownloadError] = useState('');
 
   // AI 助手相关状态
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const activeChat = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // 历史记录相关状态
@@ -41,39 +124,41 @@ export default function Create() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleModeChange = (newMode: 'story' | 'image2poem') => {
+  const handleModeChange = (newMode: CreationMode) => {
     setMode(newMode);
+    setGenerationError('');
+    setDownloadError('');
     // 清空之前的结果
     setStoryResult(null);
     setPosterResult(null);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setUploadedImage(event.target?.result as string);
-        setPosterResult(null);
-      };
-      reader.readAsDataURL(file);
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0];
+    if (!file) return;
+    e.currentTarget.value = '';
+    setUploadedImage(null);
+    setPosterResult(null);
+    setDownloadError('');
+    if (!SUPPORTED_IMAGE_TYPES.includes(file.type) || file.size > MAX_IMAGE_BYTES || file.size === 0) {
+      setGenerationError('请选择 3 MB 以内的 JPG、PNG 或 WebP 图片。');
+      return;
+    }
+    setGenerationError('');
+    setIsReadingImage(true);
+    try {
+      setUploadedImage(await readImageAsDataUrl(file));
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : '无法读取图片，请重新选择。');
+    } finally {
+      setIsReadingImage(false);
     }
   };
 
   const handleGenerate = async () => {
-    // 校验输入
-    if (mode === 'story') {
-      if (!keywords.trim()) {
-        alert('请输入关键词');
-        return;
-      }
-    } else {
-      if (!uploadedImage) {
-        alert('请上传图片');
-        return;
-      }
-    }
-
+    if (isGenerating || isReadingImage) return;
+    setGenerationError('');
+    setDownloadError('');
     setIsGenerating(true);
     setStoryResult(null);
     setPosterResult(null);
@@ -82,13 +167,18 @@ export default function Create() {
       if (mode === 'story') {
         const res = await generateStory(keywords, selectedStyle);
         setStoryResult(res);
-      } else {
-        const res = await generateFromImage(uploadedImage);
-        setPosterResult(res);
+      } else if (uploadedImage) {
+        let imageUrl = uploadedImage;
+        if (uploadedImage === exhibit?.detailImage) {
+          const response = await fetch(exhibit.detailImage);
+          if (!response.ok) throw new Error('展品图片暂时无法读取，请重试或上传自己的照片。');
+          imageUrl = await readImageAsDataUrl(await response.blob());
+        }
+        const result = await generateFromImage(imageUrl);
+        setPosterResult({ ...result, imageUrl: uploadedImage });
       }
     } catch (error) {
-      console.error('生成失败:', error);
-      alert(`生成失败：${error instanceof Error ? error.message : '未知错误'}`);
+      setGenerationError(error instanceof Error ? error.message : '创作失败，请重试。');
     } finally {
       setIsGenerating(false);
     }
@@ -96,6 +186,7 @@ export default function Create() {
 
   const handleDownload = async () => {
     if (!posterResult) return;
+    setDownloadError('');
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -108,10 +199,12 @@ export default function Create() {
     img.crossOrigin = 'anonymous';
     img.src = posterResult.imageUrl;
 
-    await new Promise((resolve) => {
-      img.onload = resolve;
-      img.onerror = resolve;
-    });
+    try {
+      await img.decode();
+    } catch {
+      setDownloadError('海报图片加载失败，请重新生成后再试。');
+      return;
+    }
 
     // Draw cover image (cover aspect ratio)
     const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
@@ -155,11 +248,11 @@ export default function Create() {
     ctx.font = '30px "Inter", sans-serif';
     ctx.fillStyle = 'rgba(249, 249, 246, 0.5)';
     ctx.textAlign = 'left';
-    ctx.fillText('AI 文化共创平台', 80, canvas.height - 80);
+    ctx.fillText('文织万象', 80, canvas.height - 80);
 
     // Trigger download
     const link = document.createElement('a');
-    link.download = `AI_Poster_${Date.now()}.png`;
+    link.download = `文织万象-诗词海报-${Date.now()}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -169,9 +262,21 @@ export default function Create() {
     navigator.clipboard.writeText(`${storyResult.title}\n\n${storyResult.content}`);
   };
 
+  const handleDownloadStory = () => {
+    if (!storyResult) return;
+    const text = new Blob([`${storyResult.title}\n\n${storyResult.content}`], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(text);
+    const link = document.createElement('a');
+    link.download = `文织万象-故事-${Date.now()}.txt`;
+    link.href = url;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   // 聊天功能
   const handleSendMessage = async () => {
     if (!chatInput.trim() || isChatLoading) return;
+    setChatError('');
 
     const userMessage: ChatMessage = {
       role: 'user',
@@ -183,23 +288,33 @@ export default function Create() {
     if (!sessionId) {
       const newSession = createChatSession(userMessage.content);
       sessionId = newSession.id;
+      activeChat.current = sessionId;
       setCurrentSessionId(sessionId);
       setChatSessions(getChatSessions());
     }
 
-    setChatMessages(prev => [...prev, userMessage]);
+    const pendingMessages = [...chatMessages, userMessage];
+    setChatMessages(pendingMessages);
     setChatInput('');
     setIsChatLoading(true);
 
     try {
-      const response = await chatWithAI([...chatMessages, userMessage]);
-      setChatMessages(prev => [...prev, { role: 'assistant', content: response }]);
+      const response = await chatWithAI(pendingMessages);
+      const completedMessages: ChatMessage[] = [...pendingMessages, { role: 'assistant', content: response }];
+      if (activeChat.current === sessionId) {
+        setChatMessages(completedMessages);
+      } else if (sessionId) {
+        updateChatSession(sessionId, completedMessages);
+        setChatSessions(getChatSessions());
+      }
     } catch (error) {
-      console.error('聊天错误:', error);
-      setChatMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '抱歉，发生了错误，请稍后再试。'
-      }]);
+      if (activeChat.current === sessionId) {
+        setChatMessages(chatMessages);
+        if (sessionId) updateChatSession(sessionId, chatMessages);
+        setChatSessions(getChatSessions());
+        setChatInput(userMessage.content);
+        setChatError(error instanceof Error ? error.message : '发送失败，请重试。');
+      }
     } finally {
       setIsChatLoading(false);
     }
@@ -207,6 +322,8 @@ export default function Create() {
 
   // 开始新对话
   const handleNewChat = () => {
+    activeChat.current = null;
+    setChatError('');
     setChatMessages([]);
     setCurrentSessionId(null);
     setChatInput('');
@@ -214,13 +331,15 @@ export default function Create() {
 
   // 切换到指定会话
   const handleSelectSession = (session: ChatSession) => {
+    activeChat.current = session.id;
+    setChatError('');
     setCurrentSessionId(session.id);
     setChatMessages(session.messages);
     setShowHistory(false);
   };
 
   // 删除会话
-  const handleDeleteSession = (sessionId: string, e: React.MouseEvent) => {
+  const handleDeleteSession = (sessionId: string, e: MouseEvent) => {
     e.stopPropagation();
     deleteChatSession(sessionId);
     const updatedSessions = getChatSessions();
@@ -247,31 +366,34 @@ export default function Create() {
   }, [chatMessages, isChatOpen]);
 
   return (
-    <div className="min-h-screen pt-24 pb-20 px-6 max-w-7xl mx-auto flex flex-col lg:flex-row gap-12">
+    <div className="wrap page-shell workshop-columns grid gap-8 lg:grid-cols-[minmax(300px,1fr)_minmax(0,1.7fr)] lg:gap-12">
       {/* Left Panel: Controls */}
-      <div className="w-full lg:w-1/3 flex flex-col gap-8">
-        <div>
-          <h1 className="text-4xl font-serif font-bold mb-4">AI 文化创作</h1>
-          <p className="text-ink-light tracking-widest text-sm leading-relaxed">
-            输入关键词生成文化故事，或上传风景照赋诗，体验 AI 文化共创的魅力。
-          </p>
-        </div>
+      <div className="min-w-0 flex flex-col gap-8">
+        <header className="page-intro">
+          <h1>创作工坊</h1>
+          <p>输入关键词写故事，或上传一张照片作诗。</p>
+          {exhibit && <Link className="text-link" to={`/exhibitions/${exhibit.id}`}>创作灵感 · {exhibit.title}</Link>}
+        </header>
 
-        <div className="space-y-8 bg-white p-8 rounded-3xl shadow-sm border border-ink/5">
+        <div className="paper-panel space-y-6 p-5 sm:p-7">
           {/* Mode Toggle */}
-          <div className="flex p-1 bg-rice rounded-xl border border-ink/5">
+          <div className="flex gap-1 border-b border-ink/20">
             <button
               onClick={() => handleModeChange('story')}
-              className={`flex-1 py-3 text-sm tracking-widest rounded-lg transition-all ${
-                mode === 'story' ? 'bg-white shadow-sm font-medium text-china-red' : 'text-ink-light hover:text-ink'
+              disabled={isGenerating || isReadingImage}
+              aria-pressed={mode === 'story'}
+              className={`flex-1 min-h-11 px-2 py-2 text-sm transition-colors ${
+                mode === 'story' ? 'bg-moss text-paper font-medium' : 'text-ink-light hover:bg-rice hover:text-ink'
               }`}
             >
               故事生成
             </button>
             <button
               onClick={() => handleModeChange('image2poem')}
-              className={`flex-1 py-3 text-sm tracking-widest rounded-lg transition-all ${
-                mode === 'image2poem' ? 'bg-white shadow-sm font-medium text-china-red' : 'text-ink-light hover:text-ink'
+              disabled={isGenerating || isReadingImage}
+              aria-pressed={mode === 'image2poem'}
+              className={`flex-1 min-h-11 px-2 py-2 text-sm transition-colors ${
+                mode === 'image2poem' ? 'bg-moss text-paper font-medium' : 'text-ink-light hover:bg-rice hover:text-ink'
               }`}
             >
               看图作诗
@@ -288,14 +410,16 @@ export default function Create() {
                 className="space-y-6"
               >
                 <div>
-                  <label className="block text-sm font-medium mb-3 tracking-widest text-ink flex items-center gap-2">
+                  <label htmlFor="story-keywords" className="block text-sm font-medium mb-3 tracking-widest text-ink flex items-center gap-2">
                     <Type className="w-4 h-4" /> 关键词
                   </label>
                   <textarea
+                    id="story-keywords"
+                    maxLength={MAX_STORY_KEYWORDS}
                     value={keywords}
                     onChange={(e) => setKeywords(e.target.value)}
                     placeholder="例如：京剧 + 少年 + 成长"
-                    className="w-full h-32 p-4 bg-rice/50 border border-ink/10 rounded-2xl focus:outline-none focus:border-china-red focus:ring-1 focus:ring-china-red transition-all resize-none"
+                    className="w-full h-32 p-4 bg-rice/70 border border-ink/20 focus:border-moss resize-y"
                   />
                 </div>
                 <div>
@@ -307,10 +431,11 @@ export default function Create() {
                       <button
                         key={style}
                         onClick={() => setSelectedStyle(style)}
-                        className={`py-2 px-2 rounded-xl border text-xs tracking-widest transition-all ${
+                        aria-pressed={selectedStyle === style}
+                        className={`min-h-11 py-2 px-2 border text-sm transition-colors ${
                           selectedStyle === style
-                            ? 'border-china-red bg-china-red/5 text-china-red font-medium'
-                            : 'border-ink/10 text-ink-light hover:border-ink/30 hover:bg-ink/5'
+                            ? 'border-moss bg-moss/10 text-moss font-medium'
+                            : 'border-ink/15 text-ink-light hover:border-moss hover:bg-rice'
                         }`}
                       >
                         {style}
@@ -329,28 +454,30 @@ export default function Create() {
               >
                 <div>
                   <label className="block text-sm font-medium mb-3 tracking-widest text-ink flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4" /> 上传风景照
+                    <ImageIcon className="w-4 h-4" /> {uploadedImage === exhibit?.detailImage ? '使用展品图片' : '上传照片'}
                   </label>
-                  <div
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept={SUPPORTED_IMAGE_TYPES.join(',')}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-48 border-2 border-dashed border-ink/20 rounded-2xl flex flex-col items-center justify-center hover:border-china-red hover:bg-china-red/5 transition-all relative overflow-hidden group cursor-pointer"
+                    disabled={isGenerating || isReadingImage}
+                    className="w-full h-48 border border-dashed border-ink/35 flex flex-col items-center justify-center hover:border-moss hover:bg-moss/5 transition-colors relative overflow-hidden"
                   >
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
                     {uploadedImage ? (
-                      <img src={uploadedImage} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-20 transition-opacity" />
+                      <img src={uploadedImage} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-20 transition-opacity" />
                     ) : null}
-                    <div className="flex flex-col items-center text-ink-light group-hover:text-china-red transition-colors">
+                    <span className="relative flex flex-col items-center text-ink-light">
                       <Upload className="w-8 h-8 mb-4" />
-                      <p className="font-medium tracking-widest mb-2">{uploadedImage ? '点击更换图片' : '点击上传照片'}</p>
-                      <p className="text-xs opacity-70">支持 JPG, PNG 格式</p>
-                    </div>
-                  </div>
+                      <span className="font-medium tracking-widest mb-2">{isReadingImage ? '读取图片中…' : uploadedImage ? '点击更换图片' : '点击上传照片'}</span>
+                      <span className="text-xs">JPG、PNG 或 WebP，最大 3 MB</span>
+                    </span>
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -359,8 +486,8 @@ export default function Create() {
           {/* Generate Button */}
           <button
             onClick={handleGenerate}
-            disabled={isGenerating || (mode === 'story' ? !keywords.trim() : !uploadedImage)}
-            className="w-full py-4 bg-ink text-rice rounded-2xl font-serif tracking-widest text-lg flex items-center justify-center gap-2 hover:bg-china-red transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+            disabled={isGenerating || isReadingImage || (mode === 'story' ? !keywords.trim() : !uploadedImage)}
+            className="w-full min-h-12 py-3 bg-ink text-paper flex items-center justify-center gap-2 hover:bg-moss transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
               <>
@@ -369,17 +496,21 @@ export default function Create() {
               </>
             ) : (
               <>
-                <Sparkles className="w-5 h-5" />
+                <GenerateIcon className="w-5 h-5" />
                 {mode === 'story' ? '生成故事' : '生成诗词'}
               </>
             )}
           </button>
+          {generationError && <p role="alert" className="text-sm text-china-red">{generationError}</p>}
         </div>
       </div>
 
       {/* Right Panel: Results */}
-      <div className="w-full lg:w-2/3 h-[700px] bg-white rounded-3xl shadow-sm border border-ink/5 p-8 flex flex-col relative overflow-hidden">
-        <div className="flex-1 overflow-y-auto pr-2">
+      <div className="paper-panel min-w-0 min-h-72 lg:min-h-[660px] p-5 sm:p-8 flex flex-col relative">
+        <h2 className="pb-4 mb-4 border-b border-ink/20 text-xl font-extrabold text-moss">
+          {mode === 'story' ? '故事预览' : '诗词海报预览'}
+        </h2>
+        <div className="flex-1 min-w-0">
           <AnimatePresence mode="wait">
           {!storyResult && !posterResult && !isGenerating ? (
             <motion.div
@@ -387,10 +518,10 @@ export default function Create() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center text-ink-light opacity-50"
+              className="min-h-52 lg:min-h-[470px] flex flex-col items-center justify-center text-ink-light text-center"
             >
               <BookOpen className="w-16 h-16 mb-4 stroke-1" />
-              <p className="font-serif tracking-widest">等待灵感降临...</p>
+              <p>{mode === 'story' ? '从几个关键词开始，写成的故事会在这里展开。' : poemPreviewHint}</p>
             </motion.div>
           ) : isGenerating ? (
             <motion.div
@@ -403,10 +534,10 @@ export default function Create() {
               <div className="relative w-24 h-24 mb-8">
                 <div className="absolute inset-0 border-4 border-rice rounded-full"></div>
                 <div className="absolute inset-0 border-4 border-china-red rounded-full border-t-transparent animate-spin"></div>
-                <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-china-red animate-pulse" />
+                <GenerateIcon className="absolute inset-0 m-auto w-8 h-8 text-china-red animate-pulse" />
               </div>
               <p className="font-serif tracking-widest text-ink animate-pulse">
-                {mode === 'story' ? 'AI 正在编织故事...' : 'AI正在融合图文意境...'}
+                {mode === 'story' ? '正在写故事…' : '正在看图作诗…'}
               </p>
             </motion.div>
           ) : storyResult ? (
@@ -418,7 +549,7 @@ export default function Create() {
               className="w-full max-w-3xl"
             >
               {/* Story Display */}
-              <div className="bg-rice/30 rounded-2xl p-8 md:p-12 border border-ink/10 mb-6">
+              <div className="bg-rice/50 p-4 sm:p-8 border border-ink/15 mb-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-3xl font-serif font-bold text-ink">{storyResult.title}</h2>
                   <div className="flex gap-2">
@@ -447,13 +578,16 @@ export default function Create() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-4 justify-center">
+              <div className="flex flex-wrap gap-4 justify-center">
                 <button
                   onClick={handleCopyStory}
                   className="px-6 py-3 bg-ink text-rice rounded-full font-serif tracking-widest flex items-center justify-center gap-2 hover:bg-china-red transition-colors"
                 >
                   <Copy className="w-4 h-4" />
                   复制故事
+                </button>
+                <button onClick={handleDownloadStory} className="text-link">
+                  <Download size={17} aria-hidden="true" /> 下载故事
                 </button>
               </div>
             </motion.div>
@@ -489,7 +623,7 @@ export default function Create() {
                 </div>
 
                 <div className="absolute bottom-6 left-6 text-rice/60 text-xs tracking-widest font-sans pointer-events-none">
-                  AI 文化共创平台
+                  文织万象
                 </div>
               </div>
 
@@ -500,6 +634,7 @@ export default function Create() {
                 <Download className="w-5 h-5" />
                 下载高清海报
               </button>
+              {downloadError && <p className="mt-3 text-sm text-china-red" role="alert">{downloadError}</p>}
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -507,7 +642,7 @@ export default function Create() {
       </div>
 
       {/* 浮动AI助手 */}
-      <div className="fixed bottom-8 right-8 z-50">
+      <div className="fixed bottom-5 right-5 z-50 sm:bottom-8 sm:right-8">
         {/* 聊天窗口 */}
         <AnimatePresence>
           {isChatOpen && (
@@ -516,17 +651,16 @@ export default function Create() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.8, y: 20 }}
               transition={{ duration: 0.2 }}
-              className="absolute bottom-20 right-0 w-[380px] h-[500px] bg-white rounded-3xl shadow-2xl border border-ink/10 flex flex-col overflow-hidden"
+              className="absolute bottom-20 right-0 w-[min(380px,calc(100vw-40px))] h-[min(500px,65dvh)] bg-paper shadow-xl border border-ink/25 flex flex-col overflow-hidden"
             >
               {/* 聊天头部 */}
-              <div className="bg-gradient-to-r from-china-red to-red-600 px-6 py-4 flex items-center justify-between">
+              <div className="bg-moss px-5 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-white" />
+                    <InkstoneIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-white font-serif font-bold text-lg">AI创作助手</h3>
-                    <p className="text-white/70 text-xs">文化共创 · 灵感启发</p>
+                    <h3 className="text-paper font-serif font-bold text-lg">创作助手</h3>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -558,8 +692,7 @@ export default function Create() {
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-rice/30">
                     {chatMessages.length === 0 && (
                       <div className="flex flex-col items-center justify-center h-full text-ink-light opacity-60">
-                        <Sparkles className="w-12 h-12 mb-3 stroke-1" />
-                        <p className="font-serif text-sm tracking-widest">你好！我是AI创作助手</p>
+                        <p className="font-serif text-sm">可以请我介绍一种工艺，或帮你梳理创作思路。</p>
                         <p className="text-xs mt-2">问我关于文化创作的任何问题</p>
                       </div>
                     )}
@@ -704,21 +837,27 @@ export default function Create() {
                 <div className="flex gap-2">
                   <input
                     type="text"
+                    aria-label="发送给创作助手的消息"
+                    maxLength={MAX_CHAT_MESSAGE}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) void handleSendMessage();
+                    }}
                     placeholder="问我关于文化创作的问题..."
                     className="flex-1 px-4 py-3 bg-rice/50 border border-ink/10 rounded-xl focus:outline-none focus:border-china-red focus:ring-1 focus:ring-china-red transition-all text-sm"
                     disabled={isChatLoading}
                   />
                   <button
                     onClick={handleSendMessage}
+                    aria-label="发送消息"
                     disabled={isChatLoading || !chatInput.trim()}
                     className="w-12 h-12 bg-china-red text-white rounded-xl flex items-center justify-center hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send className="w-5 h-5" />
                   </button>
                 </div>
+                {chatError && <p role="alert" className="mt-2 text-sm text-china-red">{chatError}</p>}
               </div>
             </motion.div>
           )}
@@ -727,9 +866,11 @@ export default function Create() {
         {/* 浮动AI按钮 */}
         <motion.button
           onClick={() => setIsChatOpen(!isChatOpen)}
+          aria-label={isChatOpen ? '关闭创作助手' : '打开创作助手'}
+          aria-expanded={isChatOpen}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="w-16 h-16 bg-gradient-to-br from-china-red to-red-600 rounded-full shadow-lg hover:shadow-xl flex items-center justify-center group"
+          className="w-14 h-14 bg-moss hover:bg-ink transition-colors flex items-center justify-center group"
         >
           <AnimatePresence mode="wait">
             {isChatOpen ? (
@@ -744,13 +885,13 @@ export default function Create() {
               </motion.div>
             ) : (
               <motion.div
-                key="sparkles"
+                key="inkstone"
                 initial={{ rotate: 90, opacity: 0 }}
                 animate={{ rotate: 0, opacity: 1 }}
                 exit={{ rotate: -90, opacity: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                <Sparkles className="w-8 h-8 text-white group-hover:animate-pulse" />
+                <InkstoneIcon className="w-8 h-8 text-white group-hover:animate-pulse" />
               </motion.div>
             )}
           </AnimatePresence>

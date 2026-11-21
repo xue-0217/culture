@@ -3,41 +3,62 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Link, Navigate, Routes, Route, useLocation, useParams } from 'react-router-dom';
 import { useEffect } from 'react';
+import { MotionConfig } from 'motion/react';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Create from './pages/Create';
-import Community from './pages/Community';
-import Explore from './pages/Explore';
-import Profile from './pages/Profile';
-import PostDetail from './pages/PostDetail';
+import Exhibitions, { ExhibitDetail } from './pages/Exhibitions';
+import Atlas, { CraftDetail } from './pages/Atlas';
+import Topics from './pages/Topics';
+import { findExhibit, formerExhibitDestinations } from './data/exhibition';
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash, state } = useLocation();
 
   useEffect(() => {
+    const target = hash && document.getElementById(hash.slice(1));
+    if (target) {
+      target.scrollIntoView();
+      return;
+    }
     window.scrollTo(0, 0);
-  }, [pathname]);
+    if (state?.focusContent) document.getElementById('main-content')?.focus({ preventScroll: true });
+  }, [pathname, hash, state]);
 
   return null;
 }
 
+function LegacyExhibit() {
+  const { postId } = useParams();
+  const work = findExhibit(postId);
+  const destination = work ? `/exhibitions/${work.id}` : formerExhibitDestinations.get(postId ?? '') ?? '/exhibitions';
+  return <Navigate to={destination} replace />;
+}
+
 export default function App() {
   return (
-    <Router>
-      <ScrollToTop />
-      <Navbar />
-      <main className="min-h-screen bg-rice">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/create" element={<Create />} />
-          <Route path="/community" element={<Community />} />
-          <Route path="/explore" element={<Explore />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/post/:postId" element={<PostDetail />} />
-        </Routes>
-      </main>
-    </Router>
+    <MotionConfig reducedMotion="user">
+      <Router>
+        <ScrollToTop />
+        <Navbar />
+        <main id="main-content" tabIndex={-1}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/create" element={<Create />} />
+            <Route path="/exhibitions" element={<Exhibitions />} />
+            <Route path="/exhibitions/:workId" element={<ExhibitDetail />} />
+            <Route path="/atlas" element={<Atlas />} />
+            <Route path="/atlas/:craftId" element={<CraftDetail />} />
+            <Route path="/community" element={<Navigate to="/exhibitions" replace />} />
+            <Route path="/explore" element={<Topics />} />
+            <Route path="/profile" element={<Navigate to="/exhibitions" replace />} />
+            <Route path="/post/:postId" element={<LegacyExhibit />} />
+            <Route path="*" element={<div className="wrap page-shell page-intro"><h1>未找到此页</h1><Link to="/" className="text-link">回到首页</Link></div>} />
+          </Routes>
+        </main>
+      </Router>
+    </MotionConfig>
   );
 }

@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/:page(create|community|explore|profile)", "destination": "/index.html" },
+    { "source": "/post/:id", "destination": "/index.html" }
+  ]
+}

@@ -1,102 +1,97 @@
-import { Link, useLocation } from 'react-router-dom';
-import { Sparkles, Compass, Users, User, Menu, X } from 'lucide-react';
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+
+const navItems = [
+  { name: '首页', path: '/' },
+  { name: '展览', path: '/exhibitions' },
+  { name: '创作工坊', path: '/create' },
+  { name: '工艺图鉴', path: '/atlas' },
+  { name: '文化专题', path: '/explore' },
+];
 
 export default function Navbar() {
-  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const { pathname } = useLocation();
+  const menuRef = useRef<HTMLDialogElement>(null);
+  const isPoster = pathname === '/';
+  const isEditorial = pathname.startsWith('/exhibitions') || pathname.startsWith('/atlas') || pathname === '/explore';
 
-  const navItems = [
-    { name: '首页', path: '/', icon: <Compass className="w-4 h-4" /> },
-    { name: 'AI共创', path: '/create', icon: <Sparkles className="w-4 h-4" /> },
-    { name: '社区', path: '/community', icon: <Users className="w-4 h-4" /> },
-    { name: '专题', path: '/explore', icon: <Compass className="w-4 h-4" /> },
-  ];
+  useEffect(() => {
+    menuRef.current?.close();
+    setIsOpen(false);
+  }, [pathname]);
+
+  if (pathname === '/create' || pathname === '/create/') return null;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-rice/80 backdrop-blur-md border-b border-ink/5">
-      <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 group interactive">
-          <div className="w-8 h-8 bg-ink text-rice flex items-center justify-center rounded-sm font-serif font-bold text-xl group-hover:bg-china-red transition-colors">
-            文
-          </div>
-          <span className="font-serif font-bold text-xl tracking-widest">文织万象</span>
+    <header className={isPoster ? 'poster-header' : `site-header${isEditorial ? ' editorial-header' : ''}`}>
+      <div className="wrap site-header-content">
+        <a href="#main-content" className="skip-link">跳到正文</a>
+        <Link to="/" className="site-wordmark" aria-label="文织万象首页">
+          <img src="/images/brand/paper-cut-mark.webp" alt="" width={36} height={36} />
+          <span>文织万象</span>
         </Link>
 
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-8">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-2 text-sm tracking-widest transition-colors ${
-                location.pathname === item.path
-                  ? 'text-china-red font-medium'
-                  : 'text-ink-light hover:text-ink'
-              }`}
-            >
-              {item.icon}
+        <nav className="desktop-nav" aria-label="主导航">
+          {navItems.map(item => (
+            <NavLink key={item.path} to={item.path} end={item.path === '/'} className="site-nav-link">
               {item.name}
-            </Link>
+            </NavLink>
           ))}
         </nav>
 
-        <div className="hidden md:flex items-center gap-4">
-          <Link
-            to="/profile"
-            className="w-10 h-10 rounded-full border border-ink/10 flex items-center justify-center hover:border-china-red hover:text-china-red transition-colors"
-          >
-            <User className="w-5 h-5" />
-          </Link>
-        </div>
-
-        {/* Mobile Menu Toggle */}
         <button
-          className="md:hidden p-2 text-ink"
-          onClick={() => setIsOpen(!isOpen)}
+          type="button"
+          className="nav-toggle"
+          aria-label="打开导航菜单"
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          aria-controls="site-menu"
+          onClick={() => {
+            menuRef.current?.showModal();
+            setIsOpen(true);
+          }}
         >
-          {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          <span className="poster-menu-label">菜单</span>
+          <Menu size={20} aria-hidden="true" />
         </button>
       </div>
 
-      {/* Mobile Nav */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="md:hidden absolute top-20 left-0 right-0 bg-rice border-b border-ink/5 shadow-lg"
-          >
-            <div className="flex flex-col p-4 gap-4">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 p-3 rounded-lg ${
-                    location.pathname === item.path
-                      ? 'bg-china-red/5 text-china-red'
-                      : 'text-ink hover:bg-ink/5'
-                  }`}
-                >
-                  {item.icon}
-                  <span className="tracking-widest">{item.name}</span>
-                </Link>
-              ))}
-              <Link
-                to="/profile"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-lg text-ink hover:bg-ink/5"
-              >
-                <User className="w-4 h-4" />
-                <span className="tracking-widest">个人主页</span>
-              </Link>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <dialog
+        id="site-menu"
+        className="site-menu"
+        ref={menuRef}
+        aria-label="导航菜单"
+        onClose={event => setIsOpen(event.currentTarget.open)}
+      >
+        <button
+          type="button"
+          className="site-menu-close"
+          aria-label="关闭导航菜单"
+          onClick={() => menuRef.current?.close()}
+        >
+          <span>关闭</span><X size={20} aria-hidden="true" />
+        </button>
+        <div className="site-menu-wordmark" aria-hidden="true">
+          <span className="poster-wordmark">
+            <span>文</span><span>织</span><span>万</span><span>象</span>
+          </span>
+        </div>
+        <nav className="site-menu-links" aria-label="主导航">
+          {navItems.map(item => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === '/'}
+              state={item.path === '/create' ? { returnTo: pathname } : undefined}
+              onClick={() => menuRef.current?.close()}
+            >
+              {item.name}
+            </NavLink>
+          ))}
+        </nav>
+      </dialog>
     </header>
   );
 }
